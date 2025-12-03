@@ -5,16 +5,16 @@ const path = require('path');
 const app = express();
 
 const PORT = process.env.PORT || 3000;
-const OPENAQ_KEY = (process.env.OPENAQ_API_KEY || '').trim(); // for OpenAQ v3
-const WAQI_TOKEN = (process.env.WAQI_TOKEN || '').trim();     // for WAQI api.waqi.info
-const CACHE_TTL_MS = 60 * 1000; // cache 60s
+const OPENAQ_KEY = (process.env.OPENAQ_API_KEY || '').trim();
+const WAQI_TOKEN = (process.env.WAQI_TOKEN || '').trim();
+const CACHE_TTL_MS = 60 * 1000;
 
-// Simple in-memory cache
 const cache = new Map();
 
 app.use(express.static(path.join(__dirname, 'public')));
 
 function computeSimpleAQI(measurements) {
+  // fallback approx based on pm2.5 or pm10
   const pm25 = measurements.find(m => m.parameter === 'pm25');
   const pm10 = measurements.find(m => m.parameter === 'pm10');
   const v = pm25 ? pm25.value : (pm10 ? pm10.value : null);
@@ -29,7 +29,6 @@ async function fetchOpenAQv3(city) {
   const url = 'https://api.openaq.org/v3/latest';
   const headers = OPENAQ_KEY ? { 'X-API-Key': OPENAQ_KEY } : {};
   const r = await axios.get(url, { params: { city, limit: 100 }, headers, timeout: 10000 });
-  // Normalize to measurements array like [{parameter,value,unit,lastUpdated}, ...]
   const results = r.data && r.data.results ? r.data.results : [];
   if (!results.length) return { city, measurements: [], computedAQI: null };
   const measurements = (results[0].measurements || []).map(m => ({
@@ -38,18 +37,49 @@ async function fetchOpenAQv3(city) {
   return { city, measurements, computedAQI: computeSimpleAQI(measurements) };
 }
 
-async function fetchWAQI(city) {
+async function fetchWAQIbyFeed(city) {
   const url = `https://api.waqi.info/feed/${encodeURIComponent(city)}/`;
   const r = await axios.get(url, { params: { token: WAQI_TOKEN }, timeout: 10000 });
-  if (!r.data) throw new Error('No response from WAQI');
+  if (!r.data) throw new Error('No WAQI response');
   if (r.data.status !== 'ok') {
-    // WAQI returns status:'error' with message in r.data.data
     const msg = r.data.data || JSON.stringify(r.data);
-    const e = new Error('WAQI error: ' + msg);
+    const e = new Error('WAQI feed error: ' + msg);
     e._waqi = true;
     throw e;
   }
-  // Convert WAQI iaqi to our measurements format
+  const iaqi = r.data.data.iaqi || {};
+  const measurements = Object.keys(iaqi).map(k => ({
+    parameter: k,
+    value: iaqi[k].v,
+    unit: iaqi[k].u || '',
+    lastUpdated: r.data.data.time ? r.data.data.time.s : null
+  }));
+  return { city, measurements, computedAQI: computeSimpleAQI(measurements) };
+}
+
+async function fetchWAQISearchThenFeed(city) {
+  // first attempt feed endpoint
+  try {
+    const first = await fetchWAQIbyFeed(city);
+    const hasPM = first.measurements.some(m => m.parameter === 'pm25' || m.parameter === 'pm10');
+    if (hasPM) return first;
+    // fallback: search for station uid
+  } catch (err) {
+    // continue to search fallback
+  }
+
+  // Search endpoint to find best station
+  const s = await axios.get('https://api.waqi.info/search/', {
+    params: { token: WAQI_TOKEN, keyword: city }, timeout: 10000
+  });
+  if (!s.data || !Array.isArray(s.data.data) || s.data.data.length === 0) {
+    throw new Error('WAQI search returned no stations');
+  }
+  const uid = s.data.data[0].uid;
+  if (!uid) throw new Error('No WAQI uid found');
+  // call feed by uid
+  const r = await axios.get(`https://api.waqi.info/feed/@${uid}/`, { params: { token: WAQI_TOKEN }, timeout: 10000 });
+  if (!r.data || r.data.status !== 'ok') throw new Error('WAQI feed by uid failed: ' + JSON.stringify(r.data));
   const iaqi = r.data.data.iaqi || {};
   const measurements = Object.keys(iaqi).map(k => ({
     parameter: k,
@@ -65,46 +95,39 @@ app.get('/api/aqi', async (req, res) => {
   const cacheKey = `aqi:${city.toLowerCase()}`;
   const now = Date.now();
   const cached = cache.get(cacheKey);
-  if (cached && (now - cached.ts) < CACHE_TTL_MS) {
-    return res.json(cached.data);
-  }
+  if (cached && (now - cached.ts) < CACHE_TTL_MS) return res.json(cached.data);
 
-  // Try OpenAQ v3 if key is present (preferred)
+  // Try OpenAQ v3 first if key exists
   if (OPENAQ_KEY) {
     try {
       const data = await fetchOpenAQv3(city);
       cache.set(cacheKey, { ts: now, data });
       return res.json(data);
     } catch (err) {
-      // Log masked key and upstream details
       const masked = OPENAQ_KEY ? (OPENAQ_KEY.slice(0,6) + '***' + OPENAQ_KEY.slice(-4)) : '(none)';
-      console.error('OpenAQ v3 attempt failed (key='+masked+'):',
-        err.response ? (err.response.status + ' ' + JSON.stringify(err.response.data)) : err.message);
-      // fallthrough to WAQI if configured
+      console.error('OpenAQ v3 failed (key='+masked+') -', err.response ? (err.response.status + ' ' + JSON.stringify(err.response.data)) : err.message);
+      // fallthrough to WAQI
     }
   }
 
-  // If WAQI token is present, try WAQI
+  // Then try WAQI (feed with fallback to search→feed)
   if (WAQI_TOKEN) {
     try {
-      const data = await fetchWAQI(city);
+      const data = await fetchWAQISearchThenFeed(city);
       cache.set(cacheKey, { ts: now, data });
       return res.json(data);
     } catch (err) {
-      console.error('WAQI attempt failed:', err.message || err);
-      // final fallthrough
+      console.error('WAQI fetch failed -', err.message || err);
     }
   }
 
-  // If we reach here, neither provider returned usable data
-  const msg = {
+  return res.status(503).json({
     error: 'No upstream provider returned data',
-    details: 'Configure a valid OPENAQ_API_KEY (for OpenAQ v3) or WAQI_TOKEN (for WAQI).'
-  };
-  return res.status(503).json(msg);
+    details: 'Set a valid OPENAQ_API_KEY or WAQI_TOKEN in environment variables.'
+  });
 });
 
-// serve index.html for routes
+// fallback serving index.html
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
