@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: aqi-live-site
+    repo: https://github.com/Faazil/aqi-live-site
+    branch: main
+    env: node
+    plan: starter
+    rootDir: backend
+    buildCommand: "npm install"
+    startCommand: "npm start"
