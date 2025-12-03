@@ -3,48 +3,54 @@ const axios = require('axios');
 const path = require('path');
 const app = express();
 
-// Render sets the PORT automatically. Use 3000 as a default for local testing.
-const PORT = process.env.PORT || 3000; 
+// Render port
+const PORT = process.env.PORT || 3000;
 
-// IMPORTANT: The API Key must be set in Render's environment variables.
-// The default value here is only for local testing.
-const AQI_API_KEY = process.env.AQI_API_KEY || 'c6bdbb62719f66f0526ef1209ef034f9288c5a44b27d1fa3e1a82171f56b3fdf'; 
-
-// --- API Route to Fetch Data ---
-app.get('/api/aqi', async (req, res) => {
-    try {
-        // Example: We are defaulting to 'delhi' for a consistent India-centric view.
-        // You can change this or read it from a query parameter.
-        const location = req.query.location || 'delhi'; 
-        const AQI_API_URL = `https://api.waqi.info/feed/${location}/`;
-        
-        const response = await axios.get(AQI_API_URL, {
-            params: {
-                token: AQI_API_KEY
-            }
-        });
-        
-        // Check if data is valid before sending
-        if (response.data && response.data.data) {
-            return res.json(response.data.data);
-        } else {
-             return res.status(404).json({ error: 'AQI data not found for this location.' });
-        }
-    } catch (error) {
-        console.error('Error fetching AQI data:', error.message);
-        res.status(500).json({ error: 'Failed to fetch AQI data from provider.' });
-    }
-});
-
-// --- Serve Static Frontend Files ---
-// 1. Tell Express to look in the 'public' folder for files
+// Serve static frontend
 app.use(express.static(path.join(__dirname, 'public')));
 
-// 2. Catch-all route: For any URL not starting with /api, serve the main index.html file
-app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+// API Route - Using OpenAQ (Free, No Key Needed)
+app.get('/api/aqi', async (req, res) => {
+  try {
+    const city = req.query.city || "Delhi";
+    
+    const url = "https://api.openaq.org/v3/latest";
+    const response = await axios.get(url, {
+      params: { city, limit: 100 }
+    });
+
+    const results = response.data.results || [];
+    if (!results.length) {
+      return res.json({
+        city,
+        measurements: [],
+        computedAQI: null
+      });
+    }
+
+    const measurements = results[0].measurements.map(m => ({
+      parameter: m.parameter,
+      value: m.value,
+      unit: m.unit,
+      lastUpdated: m.lastUpdated
+    }));
+
+    // Simple AQI Estimate (fallback)
+    const pm25 = measurements.find(m => m.parameter === "pm25");
+    let computedAQI = null;
+    if (pm25) {
+      const v = pm25.value;
+      computedAQI = Math.round(v * 4); // simple scaling
+    }
+
+    return res.json({ city, measurements, computedAQI });
+  } catch (err) {
+    console.error("API Error:", err?.response?.data || err.message);
+    return res.status(500).json({ error: "Upstream API error" });
+  }
 });
 
+// Start server
 app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+  console.log("Server running on port", PORT);
 });
