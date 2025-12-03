@@ -1,1 +1,59 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f4f7f9;
+    color: #333;
+    text-align: center;
+}
+main {
+    max-width: 800px;
+    margin: 20px auto;
+    padding: 20px;
+    background: white;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+header h1 {
+    background-color: #004d99;
+    color: white;
+    padding: 20px 0;
+    margin: 0;
+}
+/* AQI Display Styling */
+.aqi-value {
+    font-size: 3em;
+    font-weight: bold;
+    display: inline-block;
+    padding: 15px 30px;
+    border-radius: 10px;
+    margin: 15px 0;
+    color: white;
+}
+/* Color Coding */
+.good { background-color: #009966; } /* Green */
+.moderate { background-color: #ffde33; color: #333; } /* Yellow */
+.unhealthy-sensitive { background-color: #ff9933; } /* Orange */
+.unhealthy { background-color: #cc0033; } /* Red */
+.very-unhealthy { background-color: #660099; } /* Purple */
+.hazardous { background-color: #7e0023; } /* Maroon */
 
+/* Ad Container Styling (Crucial for AdSense) */
+.ad-container {
+    margin: 20px 0;
+    padding: 10px;
+    border: 1px dashed #ccc; /* Helps visually isolate the ad unit */
+    min-height: 100px; /* Placeholder to reserve space */
+    background-color: #fafafa;
+    text-align: center;
+}
+.explanation {
+    margin-top: 30px;
+    font-size: 0.9em;
+    color: #666;
+}
+footer {
+    padding: 10px;
+    margin-top: 20px;
+    border-top: 1px solid #eee;
+    color: #999;
+}
