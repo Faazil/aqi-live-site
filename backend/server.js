@@ -8,7 +8,7 @@ const PORT = process.env.PORT || 3000;
 
 // IMPORTANT: The API Key must be set in Render's environment variables.
 // The default value here is only for local testing.
-const AQI_API_KEY = process.env.AQI_API_KEY || 'REPLACE_WITH_YOUR_KEY_FOR_LOCAL_TESTING'; 
+const AQI_API_KEY = process.env.AQI_API_KEY || 'c6bdbb62719f66f0526ef1209ef034f9288c5a44b27d1fa3e1a82171f56b3fdf'; 
 
 // --- API Route to Fetch Data ---
 app.get('/api/aqi', async (req, res) => {
