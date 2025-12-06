@@ -19,27 +19,29 @@
   <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js" defer></script>
 
   <style>
-    /* ---------- theme variables ---------- */
+    /* ---------- theme variables (light default) ---------- */
     :root{
-      --bg-1: #0f172a;            /* deep navy */
-      --bg-2: #083e77;            /* blue */
+      --bg-1: #0f172a;            /* used in gradient background */
+      --bg-2: #083e77;            /* used in gradient background */
       --accent: #ff7a59;          /* warm orange */
       --accent-2: #7c5cff;        /* purple */
       --card: rgba(255,255,255,0.98);
       --muted: #6b7280;
       --glass: rgba(255,255,255,0.06);
       --radius: 14px;
-      --shadow-lg: 0 18px 50px rgba(6,20,40,0.18);
-      --shadow-sm: 0 6px 18px rgba(6,20,40,0.08);
+      --shadow-lg: 0 18px 50px rgba(6,20,40,0.12);
+      --shadow-sm: 0 6px 18px rgba(6,20,40,0.06);
       --maxwidth: 1180px;
-      --glass-border: rgba(255,255,255,0.06);
+      --glass-border: rgba(0,0,0,0.06);
     }
 
-    html,body{height:100%;margin:0;font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;background:linear-gradient(180deg,var(--bg-1),#071d38 40%), radial-gradient(circle at 10% 10%, rgba(255,255,255,0.02), transparent 10%); color:#0b1220; -webkit-font-smoothing:antialiased;}
+    html,body{height:100%;margin:0;font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+      background:linear-gradient(180deg,var(--bg-1),#071d38 40%), radial-gradient(circle at 10% 10%, rgba(255,255,255,0.02), transparent 10%);
+      color:#0b1220; -webkit-font-smoothing:antialiased;}
     a{color:inherit}
     .wrap{max-width:var(--maxwidth);margin:0 auto;padding:28px 20px;}
 
-    /* ---------- header ---------- */
+    /* header */
     header.brand{
       display:flex;gap:18px;align-items:center;justify-content:space-between;
       padding:18px 0;color:#fff;
@@ -52,7 +54,7 @@
     .title { font-family: "Playfair Display", serif; font-size:20px; color:#fff; font-weight:600; letter-spacing:0.2px }
     .subtitle { font-size:12px; color:rgba(255,255,255,0.9); margin-top:4px; opacity:0.92 }
 
-    /* top hero */
+    /* hero */
     .hero{
       margin-top:16px;
       background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.02));
@@ -64,7 +66,6 @@
     .hero h1{margin:0;color:#fff;font-size:26px;font-family:"Playfair Display";letter-spacing:0.2px}
     .hero p{margin:10px 0 0 0;color:rgba(255,255,255,0.9)}
 
-    /* search row */
     .controls{display:flex;gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap}
     .search{
       display:flex;gap:8px;align-items:center;background:rgba(255,255,255,0.06);border-radius:10px;padding:8px 10px;border:1px solid var(--glass-border);
@@ -73,49 +74,54 @@
     .btn{background:#fff;color:var(--bg-2);padding:8px 12px;border-radius:9px;border:0;font-weight:700;cursor:pointer;box-shadow:var(--shadow-sm)}
     .btn.secondary{background:transparent;color:#fff;border:1px solid rgba(255,255,255,0.08)}
 
-    /* ---------- layout: main content ---------- */
+    /* main */
     .main-grid{display:grid;grid-template-columns:420px 1fr;gap:18px;margin-top:18px}
     @media(max-width:980px){ .main-grid{grid-template-columns:1fr} .hero-right{display:none} }
 
-    /* left column highlight card */
     .highlight{
       background:var(--card); border-radius:12px; padding:18px; box-shadow:var(--shadow-lg); display:flex;flex-direction:column;align-items:center;
     }
-    .circle-badge{width:84px;height:84px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:38px;font-weight:800;color:#111;margin:12px 0;box-shadow:0 8px 30px rgba(11,94,215,0.12)}
+    .circle-badge{width:84px;height:84px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:38px;font-weight:800;color:#111;margin:12px 0;box-shadow:0 8px 30px rgba(11,94,215,0.06)}
     .city-name{font-weight:700;margin-top:8px}
     .aqi-desc{color:var(--muted);margin-top:8px}
     .last-updated{font-size:13px;color:#9aa3ad;margin-top:12px}
 
-    /* small card for chart */
     .chart-card{margin-top:16px;background:linear-gradient(180deg,#ffffff, #fbfdff);padding:12px;border-radius:10px;box-shadow:var(--shadow-sm)}
     canvas{max-width:100%;display:block}
 
-    /* map */
     #map{height:320px;border-radius:12px;border:1px solid rgba(10,20,40,0.06);box-shadow:var(--shadow-sm);overflow:hidden}
 
-    /* right column */
     .side{background:linear-gradient(180deg, rgba(255,255,255,0.98), #fff);padding:14px;border-radius:12px;box-shadow:var(--shadow-lg); min-height: 200px}
     .city-buttons{display:flex;flex-wrap:wrap;gap:8px; max-height:380px; overflow:auto;padding-right:6px}
     .city-btn{background:#fff;border-radius:999px;padding:6px 10px;border:1px solid #eef2f7;cursor:pointer;font-weight:700;display:inline-flex;gap:8px;align-items:center}
     .city-btn .badge{background:#f3f4f6;border-radius:999px;padding:4px 8px;font-weight:800;color:#111}
-    .city-btn:hover{transform:translateY(-4px);box-shadow:0 10px 30px rgba(6,20,40,0.08)}
+    .city-btn:hover{transform:translateY(-4px);box-shadow:0 10px 30px rgba(6,20,40,0.06)}
     .legend{margin-top:10px;color:var(--muted);font-size:13px}
 
-    /* badges for aqi numbers */
     .badge-good{background:#16a34a;color:#fff}
     .badge-moderate{background:#f59e0b;color:#fff}
     .badge-unhealthy{background:#f97316;color:#fff}
     .badge-hazard{background:#dc2626;color:#fff}
 
-    /* ad placeholders styling (so they don't look ugly pre-serve) */
     .ad-box{background:linear-gradient(180deg,#fafafa,#fff);border-radius:8px;padding:12px;text-align:center;border:1px dashed #e8eef6;color:#666;margin-top:12px}
 
-    /* small footer */
     footer{margin-top:20px;text-align:center;color:#9aa3ad;font-size:13px;padding-bottom:30px}
 
-    /* subtle entrance */
     .fade-in{animation:fadeUp .7s ease both}
     @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+    /* skeleton shimmer (used by script) */
+    .skeleton {
+      background: linear-gradient(90deg, #f0f6ff 0%, #eaf2ff 50%, #f0f6ff 100%);
+      background-size: 200% 100%;
+      animation: shimmer 1.2s linear infinite;
+      border-radius: 6px;
+    }
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
   </style>
 </head>
 <body>
@@ -134,7 +140,6 @@
       </div>
     </header>
 
-    <!-- hero with optional illustration -->
     <section class="hero fade-in" aria-labelledby="hero-title">
       <div class="hero-left">
         <h1 id="hero-title">Know the air you breathe — live</h1>
@@ -150,7 +155,6 @@
         </div>
 
         <div style="display:flex;gap:12px;margin-top:18px;align-items:center">
-          <!-- sample image - replace with your own if you prefer -->
           <img src="https://images.unsplash.com/photo-1503376780353-7e6692767b70?q=80&w=520&auto=format&fit=crop&ixlib=rb-4.0.3&s=8e4f629d9d7d1e8f9c9b7d8c5a0e1c2f"
                alt="City skyline" style="width:180px;border-radius:12px;box-shadow:var(--shadow-sm);border:1px solid rgba(255,255,255,0.04)"/>
           <div style="flex:1;color:rgba(255,255,255,0.9)">
@@ -160,11 +164,10 @@
         </div>
       </div>
 
-      <!-- small right column in hero for top metrics or image -->
       <aside class="hero-right">
         <div style="background:linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03));padding:12px;border-radius:12px;color:#fff;box-shadow:var(--shadow-sm)">
           <div style="font-weight:700">Top City (live)</div>
-          <div style="font-size:36px;font-weight:800;margin-top:8px;color:#fff">—</div>
+          <div style="font-size:36px;font-weight:800;margin-top:8px;color:#fff" id="topCityDash">—</div>
           <div style="margin-top:8px;color:rgba(255,255,255,0.85)">Updated automatically</div>
         </div>
 
@@ -175,9 +178,7 @@
       </aside>
     </section>
 
-    <!-- main content grid -->
     <div class="main-grid">
-      <!-- LEFT: highlight + chart + map -->
       <div class="fade-in">
         <div class="highlight" id="highlight-card" aria-live="polite">
           <div class="city-name" id="highlight-city">—</div>
@@ -190,7 +191,6 @@
         <div class="chart-card" id="chart-wrap">
           <canvas id="aqiChart" width="640" height="260"></canvas>
 
-          <!-- Inline responsive ad (replace data-ad-slot with your slot ID after verification) -->
           <div class="ad-box" aria-hidden="true">
             <ins class="adsbygoogle"
                  style="display:block"
@@ -203,10 +203,8 @@
         </div>
 
         <div id="map" class="fade-in" style="margin-top:12px"></div>
-
       </div>
 
-      <!-- RIGHT: city buttons + legend + side ad -->
       <aside class="side fade-in">
         <h3 style="margin:0 0 10px 0">Cities</h3>
         <div class="city-buttons" id="city-buttons" aria-live="polite"></div>
@@ -220,7 +218,6 @@
           </div>
         </div>
 
-        <!-- Side ad placeholder -->
         <div class="ad-box" style="margin-top:12px" aria-hidden="true">
           <ins class="adsbygoogle"
                style="display:block"
@@ -243,11 +240,11 @@
 
   </div>
 
-  <!-- keep your frontend script (unchanged) -->
+  <!-- frontend script -->
   <script src="/script.js" defer></script>
 
-  <!-- small tweak to reserve ad space and avoid layout shift -->
   <script>
+    // reserve ad space
     document.addEventListener('DOMContentLoaded',()=>{
       document.querySelectorAll('ins.adsbygoogle').forEach(el=>{
         el.style.minHeight = '65px';
