@@ -4,12 +4,12 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Live AQI India — Real-time Air Quality Dashboard</title>
-  <meta name="description" content="Live AQI for Indian cities — search cities, view pollutant breakdown, see 24h trends and a map." />
-  <meta name="twitter:card" content="summary_large_image" />
-  <meta property="og:title" content="Live AQI India" />
-  <meta property="og:description" content="Real-time AQI for major Indian cities with map, trends and pollutant breakdown." />
+  <meta name="description" content="Live AQI for Indian cities — interactive map, pollutant breakdown, and trends." />
 
-  <!-- AD SENSE — verification script (one-per-page). KEEP YOUR ca-pub ID here -->
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Playfair+Display:wght@600&display=swap" rel="stylesheet">
+
+  <!-- AD SENSE verification (keep the ca-pub ID) -->
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2115058796417473"
           crossorigin="anonymous"></script>
 
@@ -19,137 +19,179 @@
   <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js" defer></script>
 
   <style>
+    /* ---------- theme variables ---------- */
     :root{
-      --bg:#f5f8fa; --card:#fff; --muted:#6b7280; --accent:#0b5ed7; --danger:#dc2626; --text:#0f1724;
-      --radius:10px; --shadow: 0 8px 28px rgba(2,6,23,0.06);
-    }
-    html,body{height:100%;margin:0;font-family:Inter,Roboto,Arial,sans-serif;background:var(--bg);color:var(--text);}
-    .site-header{background:#074a86;color:#fff;padding:18px 12px;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,0.06)}
-    .site-header h1{margin:0;font-size:24px}
-    .container{max-width:1150px;margin:26px auto;padding:0 16px}
-    .intro{background:var(--card);padding:18px;border-radius:var(--radius);text-align:center;box-shadow:var(--shadow)}
-    .intro p{margin:0;color:var(--muted)}
-    .controls{display:flex;gap:12px;justify-content:center;margin-top:12px;flex-wrap:wrap}
-    .search{display:flex;gap:8px;align-items:center;background:#fff;padding:8px;border-radius:8px;box-shadow:0 2px 10px rgba(2,6,23,.04)}
-    .search input{border:1px solid #e6e9ee;padding:10px 12px;border-radius:6px;min-width:240px;font-size:14px}
-    .btn{background:var(--accent);color:#fff;border:none;padding:9px 12px;border-radius:6px;cursor:pointer;font-weight:600}
-    .btn.secondary{background:#fff;color:var(--accent);border:1px solid #e6e9ee}
-    .layout{display:grid;grid-template-columns:1fr;gap:18px;margin-top:20px}
-    @media(min-width:980px){.layout{grid-template-columns:460px 1fr;align-items:start}}
-    .highlight{background:var(--card);padding:18px;border-radius:var(--radius);text-align:center;box-shadow:var(--shadow)}
-    .highlight .city{font-weight:700;margin-bottom:6px}
-    .highlight .aqi{font-size:56px;display:inline-block;padding:8px 12px;color:#111;border-radius:8px;margin:8px 0;min-width:100px}
-    .highlight .desc{color:var(--muted);margin-top:8px}
-    small.updated{display:block;color:#9aa3ad;margin-top:6px}
-    #chart-wrap{background:#fff;padding:10px;border-radius:8px;box-shadow:0 6px 18px rgba(2,6,23,0.04);margin-top:12px}
-    #map { width:100%; height:380px; border-radius:10px; box-shadow:0 6px 18px rgba(2,6,23,0.04); border:1px solid #e7ecf1 }
-    .side-panel{background:var(--card);padding:12px;border-radius:10px;box-shadow:0 6px 22px rgba(2,6,23,0.04)}
-    #city-buttons{display:flex;flex-wrap:wrap;gap:8px;max-height:420px;overflow:auto;padding-right:6px}
-    .city-btn{padding:6px 10px;border-radius:8px;background:#fff;border:1px solid #eceff3;cursor:pointer;font-weight:600;white-space:nowrap}
-    .city-btn .badge{display:inline-block;margin-left:8px;padding:2px 6px;border-radius:999px;color:#fff;font-weight:700}
-    .city-btn.active{outline:3px solid rgba(11,94,215,0.12)}
-    #status{margin-top:10px;text-align:center;color:var(--muted);min-height:36px}
-    .spinner-dot{width:12px;height:12px;border-radius:50%;margin:3px;background:var(--accent);animation:spin-b 1s infinite}
-    @keyframes spin-b{0%{transform:translateY(0)}50%{transform:translateY(-7px)}100%{transform:translateY(0)}}
-    footer{margin-top:28px;text-align:center;color:#8b95a0;padding-bottom:40px}
-    a.smalllink{font-size:13px;color:var(--muted)}
-    /* mobile tweaks */
-    @media(max-width:720px){
-      .highlight .aqi{font-size:44px}
-      .search input{min-width:140px}
+      --bg-1: #0f172a;            /* deep navy */
+      --bg-2: #083e77;            /* blue */
+      --accent: #ff7a59;          /* warm orange */
+      --accent-2: #7c5cff;        /* purple */
+      --card: rgba(255,255,255,0.98);
+      --muted: #6b7280;
+      --glass: rgba(255,255,255,0.06);
+      --radius: 14px;
+      --shadow-lg: 0 18px 50px rgba(6,20,40,0.18);
+      --shadow-sm: 0 6px 18px rgba(6,20,40,0.08);
+      --maxwidth: 1180px;
+      --glass-border: rgba(255,255,255,0.06);
     }
 
+    html,body{height:100%;margin:0;font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;background:linear-gradient(180deg,var(--bg-1),#071d38 40%), radial-gradient(circle at 10% 10%, rgba(255,255,255,0.02), transparent 10%); color:#0b1220; -webkit-font-smoothing:antialiased;}
+    a{color:inherit}
+    .wrap{max-width:var(--maxwidth);margin:0 auto;padding:28px 20px;}
+
+    /* ---------- header ---------- */
+    header.brand{
+      display:flex;gap:18px;align-items:center;justify-content:space-between;
+      padding:18px 0;color:#fff;
+    }
+    .brand-left{display:flex;gap:16px;align-items:center}
+    .logo{
+      width:56px;height:56px;border-radius:12px;background:linear-gradient(135deg,var(--accent),var(--accent-2));
+      display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:20px;box-shadow:var(--shadow-lg);
+    }
+    .title { font-family: "Playfair Display", serif; font-size:20px; color:#fff; font-weight:600; letter-spacing:0.2px }
+    .subtitle { font-size:12px; color:rgba(255,255,255,0.9); margin-top:4px; opacity:0.92 }
+
+    /* top hero */
+    .hero{
+      margin-top:16px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.02));
+      border-radius:16px; padding:22px; box-shadow:var(--shadow-lg); display:flex; gap:18px; align-items:flex-start; backdrop-filter: blur(6px);
+    }
+    .hero-left{flex:1; min-width:360px}
+    .hero-right{width:360px; display:flex;flex-direction:column;gap:12px}
+
+    .hero h1{margin:0;color:#fff;font-size:26px;font-family:"Playfair Display";letter-spacing:0.2px}
+    .hero p{margin:10px 0 0 0;color:rgba(255,255,255,0.9)}
+
+    /* search row */
+    .controls{display:flex;gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap}
+    .search{
+      display:flex;gap:8px;align-items:center;background:rgba(255,255,255,0.06);border-radius:10px;padding:8px 10px;border:1px solid var(--glass-border);
+    }
+    .search input{background:transparent;border:0;outline:none;color:#fff;min-width:240px;padding:8px;font-size:14px}
+    .btn{background:#fff;color:var(--bg-2);padding:8px 12px;border-radius:9px;border:0;font-weight:700;cursor:pointer;box-shadow:var(--shadow-sm)}
+    .btn.secondary{background:transparent;color:#fff;border:1px solid rgba(255,255,255,0.08)}
+
+    /* ---------- layout: main content ---------- */
+    .main-grid{display:grid;grid-template-columns:420px 1fr;gap:18px;margin-top:18px}
+    @media(max-width:980px){ .main-grid{grid-template-columns:1fr} .hero-right{display:none} }
+
+    /* left column highlight card */
+    .highlight{
+      background:var(--card); border-radius:12px; padding:18px; box-shadow:var(--shadow-lg); display:flex;flex-direction:column;align-items:center;
+    }
+    .circle-badge{width:84px;height:84px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:38px;font-weight:800;color:#111;margin:12px 0;box-shadow:0 8px 30px rgba(11,94,215,0.12)}
+    .city-name{font-weight:700;margin-top:8px}
+    .aqi-desc{color:var(--muted);margin-top:8px}
+    .last-updated{font-size:13px;color:#9aa3ad;margin-top:12px}
+
+    /* small card for chart */
+    .chart-card{margin-top:16px;background:linear-gradient(180deg,#ffffff, #fbfdff);padding:12px;border-radius:10px;box-shadow:var(--shadow-sm)}
+    canvas{max-width:100%;display:block}
+
+    /* map */
+    #map{height:320px;border-radius:12px;border:1px solid rgba(10,20,40,0.06);box-shadow:var(--shadow-sm);overflow:hidden}
+
+    /* right column */
+    .side{background:linear-gradient(180deg, rgba(255,255,255,0.98), #fff);padding:14px;border-radius:12px;box-shadow:var(--shadow-lg); min-height: 200px}
+    .city-buttons{display:flex;flex-wrap:wrap;gap:8px; max-height:380px; overflow:auto;padding-right:6px}
+    .city-btn{background:#fff;border-radius:999px;padding:6px 10px;border:1px solid #eef2f7;cursor:pointer;font-weight:700;display:inline-flex;gap:8px;align-items:center}
+    .city-btn .badge{background:#f3f4f6;border-radius:999px;padding:4px 8px;font-weight:800;color:#111}
+    .city-btn:hover{transform:translateY(-4px);box-shadow:0 10px 30px rgba(6,20,40,0.08)}
+    .legend{margin-top:10px;color:var(--muted);font-size:13px}
+
+    /* badges for aqi numbers */
+    .badge-good{background:#16a34a;color:#fff}
+    .badge-moderate{background:#f59e0b;color:#fff}
+    .badge-unhealthy{background:#f97316;color:#fff}
+    .badge-hazard{background:#dc2626;color:#fff}
+
+    /* ad placeholders styling (so they don't look ugly pre-serve) */
+    .ad-box{background:linear-gradient(180deg,#fafafa,#fff);border-radius:8px;padding:12px;text-align:center;border:1px dashed #e8eef6;color:#666;margin-top:12px}
+
+    /* small footer */
+    footer{margin-top:20px;text-align:center;color:#9aa3ad;font-size:13px;padding-bottom:30px}
+
+    /* subtle entrance */
+    .fade-in{animation:fadeUp .7s ease both}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
   </style>
 </head>
 <body>
-  <header class="site-header">
-    <h1>📍 Live AQI India — Real-time Air Quality Dashboard</h1>
-  </header>
-
-  <main class="container">
-    <section class="intro">
-      <p>Real-time air quality data for major Indian cities. Values may differ between providers; hover map markers for details.</p>
-
-      <div class="controls" role="region" aria-label="Controls">
-        <div class="search" aria-label="Search city">
-          <input id="searchBox" placeholder="Search city (type & press Enter) — e.g., Mumbai" autocomplete="off" />
-          <button id="searchBtn" class="btn">Search</button>
-          <button id="refreshBtn" class="btn secondary">Refresh All</button>
-        </div>
-
-        <div style="display:flex;gap:8px;align-items:center;margin-left:6px;">
-          <button id="darkToggle" class="btn secondary" title="Toggle dark mode">Dark</button>
-          <select id="categoryFilter" class="btn secondary" title="Filter by AQI category">
-            <option value="all">All categories</option>
-            <option value="good">Good (0-50)</option>
-            <option value="moderate">Moderate (51-100)</option>
-            <option value="unhealthy">Unhealthy (101-200)</option>
-            <option value="very">Very Unhealthy (201-300)</option>
-            <option value="hazardous">Hazardous (301+)</option>
-          </select>
+  <div class="wrap">
+    <header class="brand">
+      <div class="brand-left">
+        <div class="logo">AQ</div>
+        <div>
+          <div class="title">Live Air Quality Index — India</div>
+          <div class="subtitle">Real-time city AQI • Pollutant breakdown • Trends & map</div>
         </div>
       </div>
+      <div style="display:flex;gap:10px;align-items:center;">
+        <a class="smalllink" href="/privacy-policy.html" style="color:rgba(255,255,255,0.9)">Privacy</a>
+        <a class="smalllink" href="/contact.html" style="color:rgba(255,255,255,0.9)">Contact</a>
+      </div>
+    </header>
+
+    <!-- hero with optional illustration -->
+    <section class="hero fade-in" aria-labelledby="hero-title">
+      <div class="hero-left">
+        <h1 id="hero-title">Know the air you breathe — live</h1>
+        <p>Snapshot of major Indian cities. Click a city to view detailed pollutant values and a trend chart.</p>
+
+        <div class="controls" role="search" aria-label="Search and actions">
+          <div class="search">
+            <input id="searchBox" placeholder="Search city (type & press Enter) — e.g., Mumbai" aria-label="Search city">
+            <button id="searchBtn" class="btn">Search</button>
+          </div>
+          <button id="refreshBtn" class="btn secondary" title="Refresh all">Refresh</button>
+          <button id="darkToggle" class="btn secondary" title="Toggle dark">Dark</button>
+        </div>
+
+        <div style="display:flex;gap:12px;margin-top:18px;align-items:center">
+          <!-- sample image - replace with your own if you prefer -->
+          <img src="https://images.unsplash.com/photo-1503376780353-7e6692767b70?q=80&w=520&auto=format&fit=crop&ixlib=rb-4.0.3&s=8e4f629d9d7d1e8f9c9b7d8c5a0e1c2f"
+               alt="City skyline" style="width:180px;border-radius:12px;box-shadow:var(--shadow-sm);border:1px solid rgba(255,255,255,0.04)"/>
+          <div style="flex:1;color:rgba(255,255,255,0.9)">
+            <div style="font-weight:700">Why this matters</div>
+            <div style="margin-top:6px;color:rgba(255,255,255,0.9);font-size:14px">Air quality impacts health — check your city and plan your outdoor time accordingly.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- small right column in hero for top metrics or image -->
+      <aside class="hero-right">
+        <div style="background:linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03));padding:12px;border-radius:12px;color:#fff;box-shadow:var(--shadow-sm)">
+          <div style="font-weight:700">Top City (live)</div>
+          <div style="font-size:36px;font-weight:800;margin-top:8px;color:#fff">—</div>
+          <div style="margin-top:8px;color:rgba(255,255,255,0.85)">Updated automatically</div>
+        </div>
+
+        <div style="margin-top:12px;border-radius:12px;overflow:hidden">
+          <img src="https://images.unsplash.com/photo-1469474968028-56623f02e42e?q=80&w=520&auto=format&fit=crop&ixlib=rb-4.0.3&s=d4a2e6c2acb9f7d3a1f2b9a7a2f2a8a6"
+               alt="Air quality illustration" style="width:100%;height:170px;object-fit:cover;display:block"/>
+        </div>
+      </aside>
     </section>
 
-    <div class="layout">
+    <!-- main content grid -->
+    <div class="main-grid">
       <!-- LEFT: highlight + chart + map -->
-      <div>
-        <div id="highlight-card" class="highlight" aria-live="polite">
-          <div id="highlight-city" class="city">—</div>
-          <div id="aqi-value" class="aqi" style="background:#6b7280">—</div>
-          <div id="aqi-desc" class="desc">—</div>
-          <small id="last-updated" class="updated">Updated: —</small>
-
-          <!-- pollutant breakdown -->
-          <div id="pollutant-breakdown" style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center;"></div>
+      <div class="fade-in">
+        <div class="highlight" id="highlight-card" aria-live="polite">
+          <div class="city-name" id="highlight-city">—</div>
+          <div id="aqi-value" class="circle-badge" style="background:#6b7280;color:#fff">—</div>
+          <div id="aqi-desc" class="aqi-desc">—</div>
+          <div id="pollutant-breakdown" style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center"></div>
+          <div id="last-updated" class="last-updated">Updated: —</div>
         </div>
 
-        <div id="chart-wrap" style="margin-top:12px;">
+        <div class="chart-card" id="chart-wrap">
           <canvas id="aqiChart" width="640" height="260"></canvas>
 
-          <!-- AD: Primary inline ad below chart (replace data-ad-slot with your slot) -->
-          <!-- Only paste actual ad-slot value after AdSense verification -->
-          <div style="margin-top:12px;text-align:center">
-            <ins class="adsbygoogle"
-                 style="display:block;max-width:728px;margin-left:auto;margin-right:auto"
-                 data-ad-client="ca-pub-2115058796417473"
-                 data-ad-slot="REPLACE_WITH_SLOT_ID"
-                 data-ad-format="auto"
-                 data-full-width-responsive="true"></ins>
-            <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
-          </div>
-
-        </div>
-
-        <div id="map" style="margin-top:14px;"></div>
-        <div id="status" role="status">
-          <span id="status-text">Loading cities...</span>
-          <span id="spinner" style="display:inline-flex;align-items:center;margin-left:8px">
-            <span class="spinner-dot"></span><span class="spinner-dot"></span><span class="spinner-dot"></span>
-          </span>
-        </div>
-      </div>
-
-      <!-- RIGHT: side panel (city list + map legend + small ad) -->
-      <aside class="side-panel" aria-label="Side panel">
-        <h3 style="margin:0 0 10px 0">Cities</h3>
-        <div id="city-buttons" aria-live="polite"></div>
-
-        <hr style="margin:12px 0" />
-
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-          <div style="width:12px;height:12px;background:#16a34a;border-radius:99px"></div><small>Good</small>
-          <div style="width:12px;height:12px;background:#f59e0b;border-radius:99px;margin-left:8px"></div><small>Moderate</small>
-          <div style="width:12px;height:12px;background:#f97316;border-radius:99px;margin-left:8px"></div><small>Unhealthy</small>
-          <div style="width:12px;height:12px;background:#dc2626;border-radius:99px;margin-left:8px"></div><small>Hazardous</small>
-        </div>
-
-        <hr style="margin:12px 0" />
-
-        <!-- AD: Side panel ad placeholder (smaller) -->
-        <div style="text-align:center;padding:10px;border-radius:8px;background:#fafafa">
-          <small style="color:#777">Advertisement</small>
-          <div style="margin-top:8px">
+          <!-- Inline responsive ad (replace data-ad-slot with your slot ID after verification) -->
+          <div class="ad-box" aria-hidden="true">
             <ins class="adsbygoogle"
                  style="display:block"
                  data-ad-client="ca-pub-2115058796417473"
@@ -160,31 +202,56 @@
           </div>
         </div>
 
-        <hr style="margin:12px 0" />
+        <div id="map" class="fade-in" style="margin-top:12px"></div>
 
-        <div style="font-size:13px;color:var(--muted);text-align:center">
-          <a class="smalllink" href="/privacy-policy.html">Privacy Policy</a> • <a class="smalllink" href="/contact.html">Contact</a>
+      </div>
+
+      <!-- RIGHT: city buttons + legend + side ad -->
+      <aside class="side fade-in">
+        <h3 style="margin:0 0 10px 0">Cities</h3>
+        <div class="city-buttons" id="city-buttons" aria-live="polite"></div>
+
+        <div class="legend" style="margin-top:12px">
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <div style="display:flex;gap:6px;align-items:center"><div style="width:12px;height:12px;background:#16a34a;border-radius:6px"></div><small>Good</small></div>
+            <div style="display:flex;gap:6px;align-items:center"><div style="width:12px;height:12px;background:#f59e0b;border-radius:6px"></div><small>Moderate</small></div>
+            <div style="display:flex;gap:6px;align-items:center"><div style="width:12px;height:12px;background:#f97316;border-radius:6px"></div><small>Unhealthy</small></div>
+            <div style="display:flex;gap:6px;align-items:center"><div style="width:12px;height:12px;background:#dc2626;border-radius:6px"></div><small>Hazardous</small></div>
+          </div>
         </div>
 
+        <!-- Side ad placeholder -->
+        <div class="ad-box" style="margin-top:12px" aria-hidden="true">
+          <ins class="adsbygoogle"
+               style="display:block"
+               data-ad-client="ca-pub-2115058796417473"
+               data-ad-slot="REPLACE_WITH_SLOT_ID"
+               data-ad-format="auto"
+               data-full-width-responsive="true"></ins>
+          <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+        </div>
+
+        <div style="margin-top:12px;color:var(--muted);font-size:13px;text-align:center">
+          <a href="/privacy-policy.html" class="smalllink">Privacy Policy</a> • <a href="/contact.html" class="smalllink">Contact</a>
+        </div>
       </aside>
     </div>
 
     <footer>
-      © 2025 AQI India Live
+      © 2025 AQI India Live — built with ❤️ by Faazil
     </footer>
-  </main>
 
-  <!-- Dashboard logic (expects /script.js to be served from public/) -->
+  </div>
+
+  <!-- keep your frontend script (unchanged) -->
   <script src="/script.js" defer></script>
 
-  <!-- Small inline helper: prevents layout shift if ads load late -->
+  <!-- small tweak to reserve ad space and avoid layout shift -->
   <script>
-    // reserve space for ads if they are not yet serving
-    document.addEventListener('DOMContentLoaded', () => {
-      // Put a small min-height so the page doesn't jump when ads load
-      const adWrappers = document.querySelectorAll('ins.adsbygoogle');
-      adWrappers.forEach(w => {
-        w.style.minHeight = '60px';
+    document.addEventListener('DOMContentLoaded',()=>{
+      document.querySelectorAll('ins.adsbygoogle').forEach(el=>{
+        el.style.minHeight = '65px';
+        el.style.display = 'block';
       });
     });
   </script>
