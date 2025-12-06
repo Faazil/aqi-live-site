@@ -3,102 +3,164 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>AQI India Live</title>
+  <title>Live AQI India — Real-time Air Quality Dashboard</title>
+  <meta name="description" content="Real-time air quality index for Indian cities. View AQI, pollutant breakdown, 24-hour trend, and an interactive map." />
+  <!-- Open Graph -->
+  <meta property="og:title" content="Live AQI India — Real-time Air Quality Dashboard" />
+  <meta property="og:description" content="Real-time AQI for major Indian cities with map, trends, and pollutant breakdown." />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="/assets/preview.png" />
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Live AQI India" />
+  <meta name="twitter:description" content="Real-time AQI for Indian cities" />
 
-  <!-- Chart.js CDN -->
+  <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" defer></script>
+  <!-- Leaflet (map) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js" defer></script>
 
-  <!-- Simple reset + layout styles -->
+  <!-- Light styles + layout (tweak as you like) -->
   <style>
     :root{
-      --bg:#f5f8fa; --card:#fff; --muted:#6b7280; --accent:#0b5ed7;
+      --bg:#f5f8fa; --card:#fff; --muted:#6b7280; --accent:#0b5ed7; --text:#111;
     }
-    html,body{height:100%; margin:0; font-family:Inter, "Segoe UI", Roboto, Arial, sans-serif; background:var(--bg); color:#111;}
-    .site-header{background:#074a86; color:#fff; padding:20px 12px; text-align:center; box-shadow:0 2px 6px rgba(0,0,0,0.05);}
-    .site-header h1{margin:0; font-size:28px; letter-spacing:0.2px;}
-    .container{max-width:1100px; margin:28px auto; padding:0 16px;}
-    .intro{background:var(--card); padding:18px; border-radius:8px; text-align:center; box-shadow: 0 6px 18px rgba(2,6,23,0.06);}
-    .intro p{margin:0 0 10px 0; color:var(--muted);}
-    /* search + controls */
-    .controls{display:flex; gap:8px; justify-content:center; margin-top:12px; flex-wrap:wrap;}
-    .search{
-      display:flex; gap:8px; align-items:center;
-      background:#fff; padding:8px; border-radius:8px; box-shadow:0 2px 8px rgba(2,6,23,0.04);
+    html,body{height:100%;margin:0;font-family:Inter,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--text);}
+    .site-header{background:#074a86;color:#fff;padding:18px 12px;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,0.05);}
+    .site-header h1{margin:0;font-size:26px;}
+    .container{max-width:1150px;margin:26px auto;padding:0 16px;}
+    .intro{background:var(--card);padding:16px;border-radius:10px;text-align:center;box-shadow:0 6px 18px rgba(2,6,23,0.06)}
+    .intro p{margin:0;color:var(--muted)}
+    .controls{display:flex;gap:10px;justify-content:center;margin-top:12px;flex-wrap:wrap}
+    .search{display:flex;gap:8px;align-items:center;background:#fff;padding:8px;border-radius:8px;box-shadow:0 2px 8px rgba(2,6,23,0.04)}
+    .search input{border:1px solid #e6e9ee;padding:10px 12px;border-radius:6px;min-width:260px;font-size:14px}
+    .btn{background:var(--accent);color:#fff;border:none;padding:9px 12px;border-radius:6px;cursor:pointer;font-weight:600}
+    .btn.secondary{background:#fff;color:var(--accent);border:1px solid #e6e9ee}
+    .layout{display:grid;grid-template-columns:1fr;gap:18px;margin-top:20px}
+    @media(min-width:980px){.layout{grid-template-columns:450px 1fr;align-items:start}}
+    .highlight{background:var(--card);padding:16px;border-radius:10px;text-align:center;box-shadow:0 8px 28px rgba(2,6,23,0.06)}
+    .highlight .city{font-weight:700;margin-bottom:6px}
+    .highlight .aqi{font-size:56px;display:inline-block;padding:8px 12px;color:#111;border-radius:6px;margin:8px 0;min-width:100px}
+    .highlight .desc{color:var(--muted);margin-top:8px}
+    small.updated{display:block;color:#9aa3ad;margin-top:6px}
+    #chart-wrap{background:#fff;padding:10px;border-radius:8px;box-shadow:0 6px 18px rgba(2,6,23,0.04);margin-top:12px}
+    /* map */
+    #map { width:100%; height:380px; border-radius:10px; box-shadow:0 6px 18px rgba(2,6,23,0.04); border:1px solid #e7ecf1 }
+    .side-panel{background:var(--card);padding:12px;border-radius:10px;box-shadow:0 6px 22px rgba(2,6,23,0.04)}
+    #city-buttons{display:flex;flex-wrap:wrap;gap:8px;max-height:420px;overflow:auto;padding-right:6px}
+    .city-btn{padding:6px 10px;border-radius:8px;background:#fff;border:1px solid #eceff3;cursor:pointer;font-weight:600;white-space:nowrap}
+    .city-btn .badge{display:inline-block;margin-left:8px;padding:2px 6px;border-radius:999px;color:#fff;font-weight:700}
+    .city-btn.active{outline:3px solid rgba(11,94,215,0.12)}
+    /* small mobile nav bottom */
+    .mobile-nav{display:none}
+    @media(max-width:720px){
+      .layout{grid-template-columns:1fr}
+      .mobile-nav{display:flex;position:fixed;bottom:12px;left:50%;transform:translateX(-50%);gap:8px;background:#fff;padding:8px;border-radius:999px;box-shadow:0 8px 30px rgba(2,6,23,0.12)}
     }
-    .search input{border:1px solid #e6e9ee; padding:10px 12px; border-radius:6px; min-width:260px; font-size:14px;}
-    .btn{background:var(--accent); color:#fff; border:none; padding:9px 12px; border-radius:6px; cursor:pointer; font-weight:600;}
-    .btn.secondary{background:#fff; color:var(--accent); border:1px solid #e6e9ee;}
-    /* layout: highlight + controls */
-    .layout{display:grid; grid-template-columns: 1fr; gap:18px; margin-top:22px;}
-    @media(min-width:920px){ .layout{grid-template-columns: 420px 1fr; align-items:start;} }
-    /* highlight card */
-    .highlight{background:var(--card); padding:18px; border-radius:10px; text-align:center; box-shadow:0 6px 22px rgba(2,6,23,0.06);}
-    .highlight .city{font-weight:700; margin-bottom:6px;}
-    .highlight .aqi{font-size:56px; display:inline-block; padding:8px 10px; color:#111; border-radius:6px; margin:6px 0; min-width:90px;}
-    .highlight .desc{color:var(--muted); margin-top:8px;}
-    .highlight small{display:block; color:#9aa3ad; margin-top:8px;}
-    /* chart container */
-    #chart-wrap{background:#fff; padding:12px; border-radius:8px; box-shadow:0 6px 18px rgba(2,6,23,0.04); margin-bottom:10px;}
-    /* list of city buttons */
-    .city-list{background:var(--card); padding:12px; border-radius:8px; box-shadow:0 6px 22px rgba(2,6,23,0.04);}
-    #city-buttons{display:flex; flex-wrap:wrap; gap:8px; }
-    .city-btn{padding:6px 10px; border-radius:8px; background:#fff; border:1px solid #eceff3; cursor:pointer; font-weight:600;}
-    .city-btn .badge{display:inline-block; margin-left:8px; padding:2px 6px; font-size:12px; border-radius:999px; color:#fff;}
-    .city-btn.active{outline:3px solid rgba(11,94,215,0.12);}
     /* status + spinner */
-    #status{margin-top:8px; text-align:center; color:var(--muted); min-height:36px;}
-    #spinner{display:none; align-items:center; justify-content:center;}
-    .spinner-dot{width:12px;height:12px;border-radius:50%;margin:3px;background:var(--accent);animation:spin-b 1s infinite;}
+    #status{margin-top:10px;text-align:center;color:var(--muted);min-height:36px}
+    #spinner{display:none;align-items:center;justify-content:center}
+    .spinner-dot{width:12px;height:12px;border-radius:50%;margin:3px;background:var(--accent);animation:spin-b 1s infinite}
     .spinner-dot:nth-child(2){background:#16a34a;animation-delay:0.12s}
     .spinner-dot:nth-child(3){background:#f59e0b;animation-delay:0.24s}
     @keyframes spin-b{0%{transform:translateY(0)}50%{transform:translateY(-7px)}100%{transform:translateY(0)}}
+    /* dark mode toggles */
+    .top-controls{display:flex;gap:10px;align-items:center;justify-content:center}
+    .toggle{cursor:pointer;padding:6px 8px;border-radius:6px;border:1px solid #e6e9ee;background:#fff}
     /* footer */
-    footer{margin-top:28px;text-align:center;color:#8b95a0;padding-bottom:40px;}
+    footer{margin-top:28px;text-align:center;color:#8b95a0;padding-bottom:40px}
+    /* small helpers */
+    .muted{color:var(--muted)}
   </style>
 </head>
 <body>
   <header class="site-header">
-    <h1>📍 Live Air Quality Index — India</h1>
+    <h1>📍 Live AQI India — Real-time Air Quality Dashboard</h1>
   </header>
 
   <main class="container">
     <section class="intro">
-      <p>Real-time air quality data for major Indian cities. Values can differ between sources.</p>
+      <p>Real-time air quality data for major Indian cities. Values may differ between providers; hover map markers for details.</p>
 
-      <div class="controls">
+      <div class="controls top-controls" style="margin-top:12px">
         <div class="search" aria-label="Search city">
           <input id="searchBox" placeholder="Search city (type & press Enter) — e.g., Mumbai" autocomplete="off" />
           <button id="searchBtn" class="btn">Search</button>
           <button id="refreshBtn" class="btn secondary">Refresh All</button>
         </div>
+
+        <div style="display:flex;gap:8px;align-items:center;margin-left:6px;">
+          <button id="darkToggle" class="toggle" title="Toggle dark mode">Dark</button>
+          <select id="categoryFilter" class="toggle" title="Filter by AQI category">
+            <option value="all">All categories</option>
+            <option value="good">Good (0-50)</option>
+            <option value="moderate">Moderate (51-100)</option>
+            <option value="unhealthy">Unhealthy (101-200)</option>
+            <option value="very">Very Unhealthy (201-300)</option>
+            <option value="hazardous">Hazardous (301+)</option>
+          </select>
+        </div>
       </div>
     </section>
 
     <div class="layout">
-      <!-- Left: Highlight + Chart -->
+      <!-- LEFT: highlight + chart + map -->
       <div>
         <div id="highlight-card" class="highlight" aria-live="polite">
           <div id="highlight-city" class="city">—</div>
           <div id="aqi-value" class="aqi" style="background:#6b7280">—</div>
           <div id="aqi-desc" class="desc">—</div>
-          <small id="last-updated">Updated: —</small>
+          <small id="last-updated" class="updated">Updated: —</small>
+
+          <!-- pollutant breakdown -->
+          <div id="pollutant-breakdown" style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">
+            <!-- JS will inject pollutant chips -->
+          </div>
         </div>
 
-        <div id="chart-wrap">
-          <canvas id="aqiChart" width="480" height="220"></canvas>
+        <div id="chart-wrap" style="margin-top:12px;">
+          <canvas id="aqiChart" width="640" height="260"></canvas>
         </div>
 
+        <div id="map" style="margin-top:14px;"></div>
         <div id="status" role="status">
           <span id="status-text">Loading cities...</span>
-          <span id="spinner" aria-hidden="true"><span class="spinner-dot"></span><span class="spinner-dot"></span><span class="spinner-dot"></span></span>
+          <span id="spinner"><span class="spinner-dot"></span><span class="spinner-dot"></span><span class="spinner-dot"></span></span>
         </div>
       </div>
 
-      <!-- Right: City list / badges -->
-      <aside class="city-list">
+      <!-- RIGHT: side panel (city list + map legend + Adsense placeholder) -->
+      <aside class="side-panel">
         <h3 style="margin:0 0 10px 0">Cities</h3>
-        <div id="city-buttons" aria-label="City buttons"></div>
+        <div id="city-buttons"></div>
+
+        <hr style="margin:12px 0" />
+
+        <!-- simple map legend -->
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <div style="width:12px;height:12px;background:#16a34a;border-radius:99px"></div><small>Good</small>
+          <div style="width:12px;height:12px;background:#f59e0b;border-radius:99px;margin-left:8px"></div><small>Moderate</small>
+          <div style="width:12px;height:12px;background:#f97316;border-radius:99px;margin-left:8px"></div><small>Unhealthy</small>
+          <div style="width:12px;height:12px;background:#dc2626;border-radius:99px;margin-left:8px"></div><small>Hazardous</small>
+        </div>
+
+        <hr style="margin:12px 0" />
+
+        <!-- AdSense placeholder: Replace with your AdSense code -->
+        <div style="text-align:center;padding:10px;border-radius:8px;background:#fafafa">
+          <small class="muted">Advertisement</small>
+          <!-- Place your AdSense snippet here -->
+          <div id="adsense-placeholder" style="margin-top:8px;color:#777">Your AdSense code goes here</div>
+        </div>
       </aside>
+    </div>
+
+    <!-- mobile nav -->
+    <div class="mobile-nav" role="navigation" aria-hidden="true" style="display:none">
+      <button class="btn" id="mobileRefresh">Refresh</button>
+      <button class="btn secondary" id="mobileMapToggle">Map</button>
+      <button class="btn secondary" id="mobileTop">Top</button>
     </div>
 
     <footer>
@@ -106,7 +168,7 @@
     </footer>
   </main>
 
-  <!-- load script last -->
+  <!-- load dashboard script; ensure server serves '/script.js' -->
   <script src="/script.js" defer></script>
 </body>
 </html>
