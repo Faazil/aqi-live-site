@@ -1,13 +1,32 @@
-// backend/public/script.js (updated with spinner + stronger logging)
+// backend/public/script.js
+// Full updated script: removes static placeholder, adds spinner, robust fetch + chart rendering
 
-// ----- small helper to ensure DOM elements exist or create them -----
+// ----- remove static placeholder that says "Loading AQI data..." (defensive quick-fix) -----
+(function removeStaticLoadingText() {
+  try {
+    const all = Array.from(document.querySelectorAll('body *'));
+    for (const el of all) {
+      if (!el.children.length) { // only check leaf nodes
+        const txt = (el.textContent || '').trim();
+        if (txt === 'Loading AQI data...' || txt === 'Loading AQI data…') {
+          el.textContent = '';
+          el.style.display = 'none';
+          console.info('[init] removed static placeholder from', el);
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[init] error removing static placeholder', e);
+  }
+})();
+
+// ----- helper to ensure DOM elements exist or create them -----
 function ensureEl(id, tag = 'div', attrs = {}) {
   let el = document.getElementById(id);
   if (!el) {
     el = document.createElement(tag);
     el.id = id;
     Object.keys(attrs).forEach(k => el.setAttribute(k, attrs[k]));
-    // Try to place near main content or at body end
     const container = document.querySelector('main') || document.querySelector('.container') || document.body;
     container.appendChild(el);
     console.info(`[init] created missing element #${id}`);
@@ -27,7 +46,7 @@ function ensureEl(id, tag = 'div', attrs = {}) {
   .spinner-dot:nth-child(2){ background:#16a34a; animation-delay:0.15s }
   .spinner-dot:nth-child(3){ background:#f59e0b; animation-delay:0.30s }
   @keyframes spinner-bounce { 0% { transform: translateY(0); } 50% { transform: translateY(-8px); } 100% { transform: translateY(0); } }
-  .aqi-loading { opacity: 0.8; transition: opacity 200ms; }
+  .aqi-loading { opacity: 0.95; transition: opacity 200ms; }
   `;
   const s = document.createElement('style');
   s.id = 'aqi-spinner-css';
@@ -35,18 +54,15 @@ function ensureEl(id, tag = 'div', attrs = {}) {
   document.head.appendChild(s);
 })();
 
-// primary UI elements (create if missing)
+// Primary UI elements (create if missing)
 const cityInput = document.getElementById('city') || (function(){
   const input = document.createElement('input'); input.id='city'; input.placeholder='City';
-  // keep it hidden if layout doesn't expect it
   input.style.display='none';
   document.body.appendChild(input);
   return input;
 })();
 
 const fetchBtn = document.getElementById('fetchBtn') || null;
-
-// status area: ensure exists and has spinner
 const statusDiv = ensureEl('status', 'div', { role: 'status' });
 statusDiv.classList.add('aqi-loading');
 statusDiv.style.marginTop = statusDiv.style.marginTop || '10px';
@@ -71,16 +87,21 @@ if (!spinnerEl) {
 
 // cityName / aqi display elements (create if missing)
 const cityName = document.getElementById('city-name') || (function(){
-  const el = document.createElement('div'); el.id='city-name'; el.style.fontWeight='600'; statusDiv.parentNode && statusDiv.parentNode.insertBefore(el, statusDiv);
-  return el;
-})();
-const aqiValue = document.getElementById('aqi-value') || (function(){
-  const el = document.createElement('div'); el.id='aqi-value'; el.textContent='—'; el.style.fontSize='36px'; el.style.margin='8px 0'; el.style.display='inline-block';
+  const el = document.createElement('div'); el.id='city-name'; el.style.fontWeight='600';
   statusDiv.parentNode && statusDiv.parentNode.insertBefore(el, statusDiv);
   return el;
 })();
+
+const aqiValue = document.getElementById('aqi-value') || (function(){
+  const el = document.createElement('div'); el.id='aqi-value'; el.textContent='—';
+  el.style.fontSize='36px'; el.style.margin='8px 0'; el.style.display='inline-block';
+  statusDiv.parentNode && statusDiv.parentNode.insertBefore(el, statusDiv);
+  return el;
+})();
+
 const aqiDesc = document.getElementById('aqi-desc') || (function(){
-  const el = document.createElement('div'); el.id='aqi-desc'; el.style.marginBottom='8px'; statusDiv.parentNode && statusDiv.parentNode.insertBefore(el, statusDiv);
+  const el = document.createElement('div'); el.id='aqi-desc'; el.style.marginBottom='8px';
+  statusDiv.parentNode && statusDiv.parentNode.insertBefore(el, statusDiv);
   return el;
 })();
 
@@ -90,11 +111,23 @@ let chart = null;
 
 // ---- helpers ----
 function setStatus(text) {
-  if (statusDiv) statusDiv.childNodes[0] && statusDiv.childNodes[0].nodeType===3 ? statusDiv.childNodes[0].nodeValue = text : statusDiv.insertBefore(document.createTextNode(text), spinnerEl);
+  try {
+    if (statusDiv) {
+      if (spinnerEl && spinnerEl.parentNode === statusDiv) {
+        Array.from(statusDiv.childNodes).forEach(node => { if (node !== spinnerEl) node.remove(); });
+        statusDiv.insertBefore(document.createTextNode(text), spinnerEl);
+      } else {
+        statusDiv.textContent = text;
+      }
+    }
+  } catch (e) {
+    console.warn('[UI] setStatus error', e);
+  }
   console.log('[UI] status:', text);
 }
-function showSpinner() { spinnerEl.style.display = 'flex'; }
-function hideSpinner() { spinnerEl.style.display = 'none'; }
+
+function showSpinner() { if (spinnerEl) spinnerEl.style.display = 'flex'; }
+function hideSpinner() { if (spinnerEl) spinnerEl.style.display = 'none'; }
 
 function aqiColor(aqi) {
   if (aqi === null || aqi === undefined) return '#6b7280';
@@ -105,14 +138,19 @@ function aqiColor(aqi) {
 }
 
 function computeSimpleAQI(measurements) {
-  const pm25 = measurements.find(m => m.parameter === 'pm25');
-  const pm10 = measurements.find(m => m.parameter === 'pm10');
-  const v = pm25 ? pm25.value : (pm10 ? pm10.value : null);
-  if (v === null || v === undefined) return null;
-  if (v <= 12) return Math.round(25 * v / 12);
-  if (v <= 35.4) return Math.round(50 + (50 * (v - 12) / (35.4 - 12)));
-  if (v <= 55.4) return Math.round(100 + (100 * (v - 35.4) / (55.4 - 35.4)));
-  return Math.round(200 + (200 * (v - 55.4) / 100));
+  try {
+    const pm25 = measurements.find(m => m.parameter === 'pm25');
+    const pm10 = measurements.find(m => m.parameter === 'pm10');
+    const v = pm25 ? pm25.value : (pm10 ? pm10.value : null);
+    if (v === null || v === undefined) return null;
+    if (v <= 12) return Math.round(25 * v / 12);
+    if (v <= 35.4) return Math.round(50 + (50 * (v - 12) / (35.4 - 12)));
+    if (v <= 55.4) return Math.round(100 + (100 * (v - 35.4) / (55.4 - 35.4)));
+    return Math.round(200 + (200 * (v - 55.4) / 100));
+  } catch (e) {
+    console.warn('[aqi] computeSimpleAQI error', e);
+    return null;
+  }
 }
 
 function safeDestroyChart() {
@@ -123,24 +161,27 @@ function safeDestroyChart() {
 
 function renderChart(measurements, computedAQI) {
   if (!ctx) {
-    // no chart canvas — skip but keep debug info
     console.debug('[chart] no canvas available, measurements:', measurements);
     return;
   }
-  const labels = measurements.map(m => m.parameter + (m.unit ? ` (${m.unit})` : ''));
-  const values = measurements.map(m => (typeof m.value === 'number' ? m.value : 0));
-  const barColor = computedAQI != null ? aqiColor(computedAQI) : '#6b7280';
-  const bgColors = values.map(() => barColor);
-  safeDestroyChart();
-  if (typeof Chart === 'undefined') {
-    console.warn('Chart.js not loaded; skipping chart render');
-    return;
+  try {
+    const labels = measurements.map(m => m.parameter + (m.unit ? ` (${m.unit})` : ''));
+    const values = measurements.map(m => (typeof m.value === 'number' ? m.value : 0));
+    const barColor = computedAQI != null ? aqiColor(computedAQI) : '#6b7280';
+    const bgColors = values.map(() => barColor);
+    safeDestroyChart();
+    if (typeof Chart === 'undefined') {
+      console.warn('Chart.js not loaded; skipping chart render');
+      return;
+    }
+    chart = new Chart(ctx, {
+      type: 'bar',
+      data: { labels, datasets: [{ label: 'Latest values', data: values, backgroundColor: bgColors }] },
+      options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+    });
+  } catch (e) {
+    console.warn('[chart] render error', e);
   }
-  chart = new Chart(ctx, {
-    type: 'bar',
-    data: { labels, datasets: [{ label: 'Latest values', data: values, backgroundColor: bgColors }] },
-    options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
-  });
 }
 
 // fetch with timeout
@@ -159,7 +200,6 @@ async function doFetch(city, attempt = 1) {
     console.info(`[fetch] requesting /api/aqi?city=${city} (attempt ${attempt})`);
     const res = await fetchWithTimeout(`/api/aqi?city=${encodeURIComponent(city)}`, {}, 12000);
 
-    // check status
     if (!res.ok) {
       const txt = await res.text().catch(() => null);
       console.error('[fetch] bad status', res.status, txt && txt.slice(0,200));
@@ -171,7 +211,6 @@ async function doFetch(city, attempt = 1) {
       return;
     }
 
-    // validate content-type
     const ctype = res.headers.get('content-type') || '';
     if (!ctype.includes('application/json')) {
       const txt = await res.text().catch(() => null);
@@ -206,7 +245,6 @@ async function doFetch(city, attempt = 1) {
       return;
     }
 
-    // display AQI
     if (computed === null) {
       aqiValue.textContent = '—';
       aqiDesc.textContent = 'PM2.5/PM10 missing — showing available pollutants';
@@ -248,14 +286,12 @@ if (fetchBtn) {
   });
 }
 
-// auto run on load — guaranteed call, logs to console so we can debug
+// auto run on load — guaranteed call, logs to console for debugging
 window.addEventListener('load', () => {
   try {
     const initialCity = (cityInput && (cityInput.value || '').trim()) || 'Delhi';
     console.info('[init] auto-fetch for city:', initialCity);
-    // if there's a fetch button, keep UI flow; otherwise call directly
     if (fetchBtn) {
-      // ensure city input shows value
       if (cityInput) cityInput.value = initialCity;
       fetchBtn.click();
     } else {
