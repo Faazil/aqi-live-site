@@ -1,5 +1,9 @@
 // public/script.js
-// Frontend dashboard script (uses /api/aqi/aggregate when available)
+// Updated frontend dashboard script with:
+//  - Dark mode (persisted via localStorage) [light default]
+//  - Skeleton loading for snapshot and city fetches
+//  - Smooth fade animation when switching city
+//  - Snapshot fallback (fetches /api/aqi/aggregate; falls back to Delhi)
 
 const CITY_LIST = [
   'Delhi','Mumbai','Bengaluru','Kolkata','Chennai','Hyderabad','Pune','Ahmedabad',
@@ -18,6 +22,7 @@ const statusText = document.getElementById('status-text');
 const spinner = document.getElementById('spinner');
 const cityButtons = document.getElementById('city-buttons');
 
+const highlightCard = document.getElementById('highlight-card');
 const highlightCity = document.getElementById('highlight-city');
 const aqiValue = document.getElementById('aqi-value');
 const aqiDesc = document.getElementById('aqi-desc');
@@ -81,6 +86,7 @@ function renderPollutantChart(measurements, computedAQI){
 }
 
 function renderPollutantChips(measurements){
+  if(!pollutantBreakdown) return;
   pollutantBreakdown.innerHTML = '';
   if(!measurements || measurements.length === 0) return;
   const top = measurements.slice().sort((a,b)=> (b.value||0) - (a.value||0)).slice(0,6);
@@ -125,7 +131,6 @@ async function fetchCityData(city, attempt=1){
   }
 }
 
-/* Map coords for cities (used to place markers) */
 const CITY_COORDS = {
   'Delhi': [28.7041,77.1025], 'Mumbai':[19.0760,72.8777], 'Bengaluru':[12.9716,77.5946],
   'Kolkata':[22.5726,88.3639], 'Chennai':[13.0827,80.2707], 'Hyderabad':[17.3850,78.4867],
@@ -168,15 +173,62 @@ function upsertMarker(city, aqi, popupHtml){
   }
 }
 
+/* ---------- Skeleton helpers & city animation ---------- */
+
+function showSkeleton() {
+  if(cityButtons) Array.from(cityButtons.children).forEach(b => b.disabled = true);
+  if(highlightCity) highlightCity.textContent = 'Loading...';
+  if(aqiValue) { aqiValue.textContent = ''; aqiValue.style.background = '#e6edf7'; aqiValue.style.color = '#e6edf7'; aqiValue.style.boxShadow = 'none'; }
+  if(aqiDesc) aqiDesc.textContent = '';
+  if(lastUpdated) lastUpdated.textContent = '';
+  if(pollutantBreakdown){
+    pollutantBreakdown.innerHTML = '';
+    for(let i=0;i<4;i++){
+      const s = document.createElement('div');
+      s.className = 'skeleton';
+      s.style.width = (80 + i*10) + 'px';
+      s.style.height = '14px';
+      s.style.borderRadius = '6px';
+      s.style.margin = '6px';
+      pollutantBreakdown.appendChild(s);
+    }
+  }
+  if(chartCanvas) chartCanvas.style.opacity = '0.25';
+  showSpinner();
+}
+
+function hideSkeleton() {
+  if(cityButtons) Array.from(cityButtons.children).forEach(b => b.disabled = false);
+  if(chartCanvas) chartCanvas.style.opacity = '';
+  hideSpinner();
+}
+
+/* animate highlight card content change */
+async function animateCitySwitch(newData) {
+  if(!highlightCard) { showCity(newData); return; }
+  highlightCard.style.transition = 'opacity .28s ease, transform .28s ease';
+  highlightCard.style.opacity = '0';
+  highlightCard.style.transform = 'translateY(6px)';
+  await new Promise(r => setTimeout(r, 280));
+  showCity(newData);
+  highlightCard.style.opacity = '1';
+  highlightCard.style.transform = 'translateY(0)';
+}
+
+/* ---------- display helpers ---------- */
+
 function showCity(data){
   hideSpinner();
-  highlightCity.textContent = data.city;
+  if(!data) return;
+  highlightCity.textContent = data.city || '—';
   const computed = data.computedAQI;
   if(computed === null || computed === undefined){
-    aqiValue.textContent = '—'; aqiValue.style.background = '#6b7280';
+    aqiValue.textContent = '—'; aqiValue.style.background = '#6b7280'; aqiValue.style.color = '#fff';
     aqiDesc.textContent = 'PM2.5/PM10 missing — showing available';
   } else {
-    aqiValue.textContent = computed; aqiValue.style.background = aqiColor(computed);
+    aqiValue.textContent = computed;
+    aqiValue.style.background = aqiColor(computed);
+    aqiValue.style.color = '#fff';
     aqiDesc.textContent = computed <=50 ? 'Good' : computed <=100 ? 'Moderate' : computed <=200 ? 'Unhealthy' : computed <=300 ? 'Very Unhealthy' : 'Hazardous';
   }
   if(data.raw && data.raw.measurements && data.raw.measurements.length){
@@ -191,13 +243,16 @@ function showCity(data){
 
 function showCityError(r){
   hideSpinner();
-  highlightCity.textContent = r.city;
-  aqiValue.textContent = '—'; aqiValue.style.background='#6b7280';
+  if(!r) return;
+  highlightCity.textContent = r.city || '—';
+  aqiValue.textContent = '—'; aqiValue.style.background='#6b7280'; aqiValue.style.color = '#fff';
   aqiDesc.textContent = `Error: ${r.error || 'unknown'}`;
   lastUpdated.textContent = '';
   pollutantBreakdown.innerHTML = '';
   safeDestroyChart();
 }
+
+/* ---------- UI building: buttons + badges ---------- */
 
 function createCityButton(city){
   const btn = document.createElement('button');
@@ -208,12 +263,13 @@ function createCityButton(city){
   btn.addEventListener('click', async ()=>{
     Array.from(cityButtons.children).forEach(c=>c.classList.remove('active'));
     btn.classList.add('active');
+
     setStatus(`Loading ${city}...`);
-    showSpinner();
+    showSkeleton();
     const r = await fetchCityData(city);
     if(r.error){ annotateButtonBadge(btn, r); showCityError(r); return; }
     annotateButtonBadge(btn, r);
-    showCity(r);
+    await animateCitySwitch(r);
   });
   return btn;
 }
@@ -235,67 +291,23 @@ function annotateButtonBadge(btn, r){
 async function loadAggregateSnapshot(){
   try {
     setStatus('Loading snapshot...');
-    showSpinner();
-    const resp = await fetchWithTimeout('/api/aqi/aggregate', {}, 12000);
-    if (!resp.ok) throw new Error('snapshot not available');
-    const json = await resp.json();
-    // json.cities is object city -> latest
-    const citiesObj = (json && json.cities) ? json.cities : {};
-    // build buttons then annotate badges
-    cityButtons.innerHTML = '';
-    for (const c of CITY_LIST){
-      const btn = createCityButton(c);
-      cityButtons.appendChild(btn);
-      const data = citiesObj[c];
-      if (data && !data.error) {
-        annotateButtonBadge(btn, data);
-        upsertMarker(c, data.computedAQI, `<strong>${c}</strong><br/>AQI: ${data.computedAQI ?? '—'}`);
-      } else {
-        annotateButtonBadge(btn, null);
-      }
-    }
-    // pick highest from snapshot
-    let best = null;
-    for (const [k, v] of Object.entries(citiesObj)){
-      if (!v || v.error || typeof v.computedAQI !== 'number') continue;
-      if (!best || v.computedAQI > best.computedAQI) best = v;
-    }
-    if (best) {
-      const btn = Array.from(cityButtons.children).find(b=>b.dataset.city===best.city);
-      if(btn){ Array.from(cityButtons.children).forEach(c=>c.classList.remove('active')); btn.classList.add('active'); }
-      showCity(best);
-    } else {
-      // fallback: show Delhi via individual call
-      const fallback = await fetchCityData('Delhi');
-      if(!fallback.error) showCity(fallback);
-    }
-    setStatus('Snapshot loaded');
-  } catch (e) {
-    console.warn('snapshot load failed', e);
-    setStatus('Snapshot not available — falling back to individual fetches');
-    // fallback: build buttons and leave them to individual fetch on click
-    cityButtons.innerHTML = '';
-    for (const c of CITY_LIST) cityButtons.appendChild(createCityButton(c));
-  } finally {
-    hideSpinner();
-  }
-}
-
-/* Refresh: use aggregate if available, otherwise per-city */
-async function refreshAll(){
-  try {
-    setStatus('Refreshing all cities...');
-    showSpinner();
+    showSkeleton();
     const resp = await fetchWithTimeout('/api/aqi/aggregate', {}, 12000).catch(()=>null);
     if (resp && resp.ok){
       const json = await resp.json();
       const citiesObj = (json && json.cities) ? json.cities : {};
-      annotateAllButtonsFromSnapshot(citiesObj);
-      // update markers
-      for (const [k, v] of Object.entries(citiesObj)){
-        if(v && !v.error) upsertMarker(k, v.computedAQI, `<strong>${k}</strong><br/>AQI: ${v.computedAQI ?? '—'}`);
+      cityButtons.innerHTML = '';
+      for (const c of CITY_LIST){
+        const btn = createCityButton(c);
+        cityButtons.appendChild(btn);
+        const data = citiesObj[c];
+        if (data && !data.error) {
+          annotateButtonBadge(btn, data);
+          upsertMarker(c, data.computedAQI, `<strong>${c}</strong><br/>AQI: ${data.computedAQI ?? '—'}`);
+        } else {
+          annotateButtonBadge(btn, null);
+        }
       }
-      // show best
       let best = null;
       for (const [k, v] of Object.entries(citiesObj)){
         if (!v || v.error || typeof v.computedAQI !== 'number') continue;
@@ -304,12 +316,75 @@ async function refreshAll(){
       if (best) {
         const btn = Array.from(cityButtons.children).find(b=>b.dataset.city===best.city);
         if(btn){ Array.from(cityButtons.children).forEach(c=>c.classList.remove('active')); btn.classList.add('active'); }
-        showCity(best);
+        await animateCitySwitch(best);
+        setStatus('Snapshot loaded');
+        return;
+      }
+    } else {
+      cityButtons.innerHTML = '';
+      for (const c of CITY_LIST) cityButtons.appendChild(createCityButton(c));
+    }
+
+    // FALLBACK: load Delhi so page isn't blank
+    setStatus('Snapshot not available — loading default city');
+    const fallback = await fetchCityData('Delhi');
+    const delBtn = Array.from(cityButtons.children).find(b=>b.dataset.city === 'Delhi');
+    if(delBtn){ Array.from(cityButtons.children).forEach(c=>c.classList.remove('active')); delBtn.classList.add('active'); }
+    if(!fallback.error){
+      annotateButtonBadge(delBtn, fallback);
+      await animateCitySwitch(fallback);
+      setStatus('Loaded Delhi (fallback)');
+    } else {
+      const firstCity = CITY_LIST[0];
+      const r = await fetchCityData(firstCity);
+      const firstBtn = Array.from(cityButtons.children).find(b=>b.dataset.city===firstCity);
+      if(firstBtn){ Array.from(cityButtons.children).forEach(c=>c.classList.remove('active')); firstBtn.classList.add('active'); }
+      if(!r.error){ annotateButtonBadge(firstBtn, r); await animateCitySwitch(r); setStatus(`Loaded ${firstCity}`); }
+      else setStatus('No city snapshot available');
+    }
+  } catch (e) {
+    console.warn('snapshot load failed', e);
+    setStatus('Snapshot not available — falling back');
+    cityButtons.innerHTML = '';
+    for (const c of CITY_LIST) cityButtons.appendChild(createCityButton(c));
+    const fallback = await fetchCityData('Delhi').catch(()=>null);
+    if(fallback && !fallback.error){
+      const delBtn = Array.from(cityButtons.children).find(b=>b.dataset.city === 'Delhi');
+      if(delBtn){ Array.from(cityButtons.children).forEach(c=>c.classList.remove('active')); delBtn.classList.add('active'); }
+      annotateButtonBadge(delBtn, fallback);
+      await animateCitySwitch(fallback);
+    }
+  } finally {
+    hideSkeleton();
+  }
+}
+
+/* Refresh: use aggregate if available, otherwise per-city */
+async function refreshAll(){
+  try {
+    setStatus('Refreshing all cities...');
+    showSkeleton();
+    const resp = await fetchWithTimeout('/api/aqi/aggregate', {}, 12000).catch(()=>null);
+    if (resp && resp.ok){
+      const json = await resp.json();
+      const citiesObj = (json && json.cities) ? json.cities : {};
+      annotateAllButtonsFromSnapshot(citiesObj);
+      for (const [k, v] of Object.entries(citiesObj)){
+        if(v && !v.error) upsertMarker(k, v.computedAQI, `<strong>${k}</strong><br/>AQI: ${v.computedAQI ?? '—'}`);
+      }
+      let best = null;
+      for (const [k, v] of Object.entries(citiesObj)){
+        if (!v || v.error || typeof v.computedAQI !== 'number') continue;
+        if (!best || v.computedAQI > best.computedAQI) best = v;
+      }
+      if (best) {
+        const btn = Array.from(cityButtons.children).find(b=>b.dataset.city===best.city);
+        if(btn){ Array.from(cityButtons.children).forEach(c=>c.classList.remove('active')); btn.classList.add('active'); }
+        await animateCitySwitch(best);
       }
       setStatus('Refreshed via snapshot');
       return;
     }
-    // fallback: fetch per-city concurrently
     const results = await batchFetch(CITY_LIST, FETCH_CONCURRENCY);
     for (const r of results){
       const btn = Array.from(cityButtons.children).find(b=>b.dataset.city===r.city);
@@ -321,7 +396,7 @@ async function refreshAll(){
     console.error('refreshAll err', e);
     setStatus('Refresh failed');
   } finally {
-    hideSpinner();
+    hideSkeleton();
   }
 }
 
@@ -346,68 +421,103 @@ async function batchFetch(cities, concurrency=4){
   return out;
 }
 
-/* Search handler */
+/* Search handler: only exact matches from CITY_LIST to avoid ambiguous "random" queries */
 async function doSearch(q){
-  const city = (q || '').trim();
-  if(!city) return;
-  // if button exists, click it
-  const existing = Array.from(cityButtons.children).find(b => b.dataset.city.toLowerCase() === city.toLowerCase());
+  const cityQ = (q || '').trim();
+  if(!cityQ) return;
+  const match = CITY_LIST.find(c => c.toLowerCase() === cityQ.toLowerCase());
+  if(!match){
+    setStatus('Unknown city — please choose one of the listed cities or try a different name');
+    return;
+  }
+  const existing = Array.from(cityButtons.children).find(b => b.dataset.city.toLowerCase() === match.toLowerCase());
   if(existing){ existing.click(); return; }
-  // else call /api/aqi?city= and add a button
-  setStatus(`Searching ${city}...`);
-  showSpinner();
-  const r = await fetchCityData(city);
+  setStatus(`Searching ${match}...`);
+  showSkeleton();
+  const r = await fetchCityData(match);
   const nb = createCityButton(r.city);
   cityButtons.prepend(nb);
   annotateButtonBadge(nb, r);
-  if(!r.error) showCity(r); else showCityError(r);
-  hideSpinner();
+  if(!r.error) await animateCitySwitch(r); else showCityError(r);
+  hideSkeleton();
 }
 
-/* event wiring */
-searchBtn.addEventListener('click', ()=>doSearch(searchBox.value));
-searchBox.addEventListener('keydown', (ev)=>{ if(ev.key === 'Enter') doSearch(searchBox.value); });
-refreshBtn.addEventListener('click', ()=>refreshAll());
-document.getElementById('categoryFilter').addEventListener('change', (ev)=>{
-  const v = ev.target.value;
-  applyCategoryFilter(v);
-});
-document.getElementById('darkToggle').addEventListener('click', ()=>{
-  const btn = document.getElementById('darkToggle');
-  const isDark = btn.dataset.mode === 'on';
-  if(isDark){
-    btn.dataset.mode = 'off'; btn.textContent = 'Dark'; document.documentElement.style.background=''; document.body.style.background='';
-  } else {
-    btn.dataset.mode = 'on'; btn.textContent = 'Light'; document.documentElement.style.background='#071021'; document.body.style.background='#071021';
-  }
-});
+/* ---------- Dark mode handling (persisted) ---------- */
 
-/* filters */
-function applyCategoryFilter(kind){
-  for(const btn of Array.from(cityButtons.children)){
-    const b = btn.querySelector('.badge');
-    const val = b && b.textContent && b.textContent !== '—' ? Number(b.textContent) : null;
-    if(kind === 'all'){ btn.style.display = ''; continue; }
-    const cat = aqiCategory(val);
-    if(kind === 'good' && cat !== 'good') btn.style.display = 'none';
-    else if(kind === 'moderate' && cat !== 'moderate') btn.style.display = 'none';
-    else if(kind === 'unhealthy' && cat !== 'unhealthy') btn.style.display = 'none';
-    else if(kind === 'very' && cat !== 'very') btn.style.display = 'none';
-    else if(kind === 'hazardous' && cat !== 'hazardous') btn.style.display = 'none';
-    else btn.style.display = '';
+const cssRoot = document.documentElement;
+const originalVars = {
+  '--bg-1': getComputedStyle(cssRoot).getPropertyValue('--bg-1') || '#0f172a',
+  '--bg-2': getComputedStyle(cssRoot).getPropertyValue('--bg-2') || '#083e77',
+  '--accent': getComputedStyle(cssRoot).getPropertyValue('--accent') || '#ff7a59',
+  '--accent-2': getComputedStyle(cssRoot).getPropertyValue('--accent-2') || '#7c5cff',
+  '--card': getComputedStyle(cssRoot).getPropertyValue('--card') || 'rgba(255,255,255,0.98)'
+};
+
+function applyDarkMode(on){
+  try {
+    if(on){
+      cssRoot.style.setProperty('--bg-1', '#020617');
+      cssRoot.style.setProperty('--bg-2', '#071022');
+      cssRoot.style.setProperty('--accent', '#ff8a65');
+      cssRoot.style.setProperty('--accent-2', '#9b84ff');
+      cssRoot.style.setProperty('--card', 'rgba(10,12,16,0.6)');
+      document.body.style.color = '#e6eef8';
+      const btn = document.getElementById('darkToggle');
+      if(btn){ btn.textContent = 'Light'; btn.dataset.mode = 'on'; }
+    } else {
+      cssRoot.style.setProperty('--bg-1', originalVars['--bg-1'].trim());
+      cssRoot.style.setProperty('--bg-2', originalVars['--bg-2'].trim());
+      cssRoot.style.setProperty('--accent', originalVars['--accent'].trim());
+      cssRoot.style.setProperty('--accent-2', originalVars['--accent-2'].trim());
+      cssRoot.style.setProperty('--card', originalVars['--card'].trim());
+      document.body.style.color = '';
+      const btn = document.getElementById('darkToggle');
+      if(btn){ btn.textContent = 'Dark'; btn.dataset.mode = 'off'; }
+    }
+    localStorage.setItem('aqi:dark', on ? '1' : '0');
+  } catch (e) {
+    console.warn('dark mode apply failed', e);
   }
 }
 
-/* bootstrap */
+function initDarkModeFromStorage(){
+  try {
+    const val = localStorage.getItem('aqi:dark');
+    const on = val === '1';
+    // Light default: if val is null, keep light (on=false)
+    applyDarkMode(on);
+    const btn = document.getElementById('darkToggle');
+    if(btn){
+      btn.addEventListener('click', ()=> {
+        const cur = btn.dataset.mode === 'on';
+        applyDarkMode(!cur);
+      });
+    }
+  } catch (e) {
+    console.warn('initDarkModeFromStorage failed', e);
+  }
+}
+
+/* ---------- bootstrap ---------- */
+
 async function init(){
   try {
+    initDarkModeFromStorage();
     initMap();
+    showSkeleton();
     await loadAggregateSnapshot();
+    hideSkeleton();
     setInterval(()=>{ refreshAll(); }, AUTO_REFRESH_MS);
   } catch(e){
     console.error('init err', e);
     setStatus('Initialization failed');
+    hideSkeleton();
   }
 }
+
+/* event wiring */
+if(searchBtn) searchBtn.addEventListener('click', ()=>doSearch(searchBox.value));
+if(searchBox) searchBox.addEventListener('keydown', (ev)=>{ if(ev.key === 'Enter') doSearch(searchBox.value); });
+if(refreshBtn) refreshBtn.addEventListener('click', ()=>refreshAll());
 
 init();
