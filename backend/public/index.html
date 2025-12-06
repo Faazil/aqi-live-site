@@ -2,33 +2,43 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"
-          data-ad-client="ca-pub-2115058796417473" crossorigin="anonymous"></script>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Live AQI India — Real-time Air Quality Dashboard</title>
-  <meta name="description" content="Real-time air quality index for Indian cities. View AQI, pollutant breakdown, 24-hour trend, and an interactive map." />
-  <!-- Chart.js -->
+  <meta name="description" content="Live AQI for Indian cities — search cities, view pollutant breakdown, see 24h trends and a map." />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta property="og:title" content="Live AQI India" />
+  <meta property="og:description" content="Real-time AQI for major Indian cities with map, trends and pollutant breakdown." />
+
+  <!-- AD SENSE — verification script (one-per-page). KEEP YOUR ca-pub ID here -->
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2115058796417473"
+          crossorigin="anonymous"></script>
+
+  <!-- Chart.js and Leaflet -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" defer></script>
-  <!-- Leaflet (map) -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js" defer></script>
 
   <style>
-    :root{ --bg:#f5f8fa; --card:#fff; --muted:#6b7280; --accent:#0b5ed7; --text:#111; }
-    html,body{height:100%;margin:0;font-family:Inter,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--text);}
-    .site-header{background:#074a86;color:#fff;padding:18px 12px;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,0.05);}
-    .container{max-width:1150px;margin:26px auto;padding:0 16px;}
-    .intro{background:var(--card);padding:16px;border-radius:10px;text-align:center;box-shadow:0 6px 18px rgba(2,6,23,0.06)}
-    .controls{display:flex;gap:10px;justify-content:center;margin-top:12px;flex-wrap:wrap}
-    .search{display:flex;gap:8px;align-items:center;background:#fff;padding:8px;border-radius:8px;box-shadow:0 2px 8px rgba(2,6,23,0.04)}
-    .search input{border:1px solid #e6e9ee;padding:10px 12px;border-radius:6px;min-width:260px;font-size:14px}
+    :root{
+      --bg:#f5f8fa; --card:#fff; --muted:#6b7280; --accent:#0b5ed7; --danger:#dc2626; --text:#0f1724;
+      --radius:10px; --shadow: 0 8px 28px rgba(2,6,23,0.06);
+    }
+    html,body{height:100%;margin:0;font-family:Inter,Roboto,Arial,sans-serif;background:var(--bg);color:var(--text);}
+    .site-header{background:#074a86;color:#fff;padding:18px 12px;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,0.06)}
+    .site-header h1{margin:0;font-size:24px}
+    .container{max-width:1150px;margin:26px auto;padding:0 16px}
+    .intro{background:var(--card);padding:18px;border-radius:var(--radius);text-align:center;box-shadow:var(--shadow)}
+    .intro p{margin:0;color:var(--muted)}
+    .controls{display:flex;gap:12px;justify-content:center;margin-top:12px;flex-wrap:wrap}
+    .search{display:flex;gap:8px;align-items:center;background:#fff;padding:8px;border-radius:8px;box-shadow:0 2px 10px rgba(2,6,23,.04)}
+    .search input{border:1px solid #e6e9ee;padding:10px 12px;border-radius:6px;min-width:240px;font-size:14px}
     .btn{background:var(--accent);color:#fff;border:none;padding:9px 12px;border-radius:6px;cursor:pointer;font-weight:600}
     .btn.secondary{background:#fff;color:var(--accent);border:1px solid #e6e9ee}
     .layout{display:grid;grid-template-columns:1fr;gap:18px;margin-top:20px}
-    @media(min-width:980px){.layout{grid-template-columns:450px 1fr;align-items:start}}
-    .highlight{background:var(--card);padding:16px;border-radius:10px;text-align:center;box-shadow:0 8px 28px rgba(2,6,23,0.06)}
+    @media(min-width:980px){.layout{grid-template-columns:460px 1fr;align-items:start}}
+    .highlight{background:var(--card);padding:18px;border-radius:var(--radius);text-align:center;box-shadow:var(--shadow)}
     .highlight .city{font-weight:700;margin-bottom:6px}
-    .highlight .aqi{font-size:56px;display:inline-block;padding:8px 12px;color:#111;border-radius:6px;margin:8px 0;min-width:100px}
+    .highlight .aqi{font-size:56px;display:inline-block;padding:8px 12px;color:#111;border-radius:8px;margin:8px 0;min-width:100px}
     .highlight .desc{color:var(--muted);margin-top:8px}
     small.updated{display:block;color:#9aa3ad;margin-top:6px}
     #chart-wrap{background:#fff;padding:10px;border-radius:8px;box-shadow:0 6px 18px rgba(2,6,23,0.04);margin-top:12px}
@@ -39,10 +49,16 @@
     .city-btn .badge{display:inline-block;margin-left:8px;padding:2px 6px;border-radius:999px;color:#fff;font-weight:700}
     .city-btn.active{outline:3px solid rgba(11,94,215,0.12)}
     #status{margin-top:10px;text-align:center;color:var(--muted);min-height:36px}
-    #spinner{display:none;align-items:center;justify-content:center}
     .spinner-dot{width:12px;height:12px;border-radius:50%;margin:3px;background:var(--accent);animation:spin-b 1s infinite}
     @keyframes spin-b{0%{transform:translateY(0)}50%{transform:translateY(-7px)}100%{transform:translateY(0)}}
     footer{margin-top:28px;text-align:center;color:#8b95a0;padding-bottom:40px}
+    a.smalllink{font-size:13px;color:var(--muted)}
+    /* mobile tweaks */
+    @media(max-width:720px){
+      .highlight .aqi{font-size:44px}
+      .search input{min-width:140px}
+    }
+
   </style>
 </head>
 <body>
@@ -54,15 +70,16 @@
     <section class="intro">
       <p>Real-time air quality data for major Indian cities. Values may differ between providers; hover map markers for details.</p>
 
-      <div class="controls">
+      <div class="controls" role="region" aria-label="Controls">
         <div class="search" aria-label="Search city">
           <input id="searchBox" placeholder="Search city (type & press Enter) — e.g., Mumbai" autocomplete="off" />
           <button id="searchBtn" class="btn">Search</button>
           <button id="refreshBtn" class="btn secondary">Refresh All</button>
         </div>
+
         <div style="display:flex;gap:8px;align-items:center;margin-left:6px;">
-          <button id="darkToggle" class="btn secondary">Dark</button>
-          <select id="categoryFilter" class="btn secondary">
+          <button id="darkToggle" class="btn secondary" title="Toggle dark mode">Dark</button>
+          <select id="categoryFilter" class="btn secondary" title="Filter by AQI category">
             <option value="all">All categories</option>
             <option value="good">Good (0-50)</option>
             <option value="moderate">Moderate (51-100)</option>
@@ -75,6 +92,7 @@
     </section>
 
     <div class="layout">
+      <!-- LEFT: highlight + chart + map -->
       <div>
         <div id="highlight-card" class="highlight" aria-live="polite">
           <div id="highlight-city" class="city">—</div>
@@ -82,24 +100,40 @@
           <div id="aqi-desc" class="desc">—</div>
           <small id="last-updated" class="updated">Updated: —</small>
 
+          <!-- pollutant breakdown -->
           <div id="pollutant-breakdown" style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center;"></div>
         </div>
 
         <div id="chart-wrap" style="margin-top:12px;">
           <canvas id="aqiChart" width="640" height="260"></canvas>
+
+          <!-- AD: Primary inline ad below chart (replace data-ad-slot with your slot) -->
+          <!-- Only paste actual ad-slot value after AdSense verification -->
+          <div style="margin-top:12px;text-align:center">
+            <ins class="adsbygoogle"
+                 style="display:block;max-width:728px;margin-left:auto;margin-right:auto"
+                 data-ad-client="ca-pub-2115058796417473"
+                 data-ad-slot="REPLACE_WITH_SLOT_ID"
+                 data-ad-format="auto"
+                 data-full-width-responsive="true"></ins>
+            <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+          </div>
+
         </div>
 
         <div id="map" style="margin-top:14px;"></div>
-
         <div id="status" role="status">
           <span id="status-text">Loading cities...</span>
-          <span id="spinner"><span class="spinner-dot"></span><span class="spinner-dot"></span><span class="spinner-dot"></span></span>
+          <span id="spinner" style="display:inline-flex;align-items:center;margin-left:8px">
+            <span class="spinner-dot"></span><span class="spinner-dot"></span><span class="spinner-dot"></span>
+          </span>
         </div>
       </div>
 
-      <aside class="side-panel">
+      <!-- RIGHT: side panel (city list + map legend + small ad) -->
+      <aside class="side-panel" aria-label="Side panel">
         <h3 style="margin:0 0 10px 0">Cities</h3>
-        <div id="city-buttons"></div>
+        <div id="city-buttons" aria-live="polite"></div>
 
         <hr style="margin:12px 0" />
 
@@ -111,19 +145,48 @@
         </div>
 
         <hr style="margin:12px 0" />
+
+        <!-- AD: Side panel ad placeholder (smaller) -->
         <div style="text-align:center;padding:10px;border-radius:8px;background:#fafafa">
           <small style="color:#777">Advertisement</small>
-          <div id="adsense-placeholder" style="margin-top:8px;color:#777">Your AdSense code goes here</div>
+          <div style="margin-top:8px">
+            <ins class="adsbygoogle"
+                 style="display:block"
+                 data-ad-client="ca-pub-2115058796417473"
+                 data-ad-slot="REPLACE_WITH_SLOT_ID"
+                 data-ad-format="auto"
+                 data-full-width-responsive="true"></ins>
+            <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+          </div>
         </div>
+
+        <hr style="margin:12px 0" />
+
+        <div style="font-size:13px;color:var(--muted);text-align:center">
+          <a class="smalllink" href="/privacy-policy.html">Privacy Policy</a> • <a class="smalllink" href="/contact.html">Contact</a>
+        </div>
+
       </aside>
     </div>
 
     <footer>
-      © 2025 AQI India Live | <a href="#" style="color:#074a86">Privacy Policy</a> | <a href="#" style="color:#074a86">Contact</a>
+      © 2025 AQI India Live
     </footer>
   </main>
 
-  <!-- our script -->
+  <!-- Dashboard logic (expects /script.js to be served from public/) -->
   <script src="/script.js" defer></script>
+
+  <!-- Small inline helper: prevents layout shift if ads load late -->
+  <script>
+    // reserve space for ads if they are not yet serving
+    document.addEventListener('DOMContentLoaded', () => {
+      // Put a small min-height so the page doesn't jump when ads load
+      const adWrappers = document.querySelectorAll('ins.adsbygoogle');
+      adWrappers.forEach(w => {
+        w.style.minHeight = '60px';
+      });
+    });
+  </script>
 </body>
 </html>
