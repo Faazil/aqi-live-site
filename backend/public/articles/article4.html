@@ -1,0 +1,37 @@
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How AQI is calculated — SoftCo</title>
+<meta name="description" content="A technical but readable explanation of the AQI calculation steps, breakpoints and how to interpret multi-pollutant AQI values." />
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+<header class="site-header"><div class="container"><h1 class="brand"><a href="/">SoftCo — AQI India Live</a></h1><nav class="main-nav"><a href="/">Home</a><a href="/about.html">About</a><a href="/contact.html">Contact</a></nav></div></header>
+<main class="container">
+<article>
+<h2>How AQI is calculated</h2>
+<p>Micro-sensors and regulatory-grade monitors measure pollutant concentrations; AQI converts those concentrations into a standardised scale using breakpoints that map pollutant ranges to index values. The pollutant with the highest resulting index determines the final reported AQI.
+</p>
+
+
+<h3>Step-by-step</h3>
+<ol>
+<li>Collect hourly (or other interval) concentration values for each pollutant.</li>
+<li>For each pollutant, find the breakpoint range containing the concentration.</li>
+<li>Interpolate the pollutant concentration into the corresponding AQI sub-index value.</li>
+<li>Report the highest sub-index as the overall AQI for the reporting period.</li>
+</ol>
+
+
+<h3>Interpreting multi-pollutant results</h3>
+<p>When particulate matter (PM2.5 or PM10) drives the AQI, health advice focuses on reducing particulate exposure. When gases (like ozone) dominate, the guidance emphasises limiting outdoor exertion during peak sunlight hours.</p>
+
+
+<h3>Practical note</h3>
+<p>Different countries use slightly different breakpoints or averaging times; always consult the local authority for official definitions.</p>
+</article>
+</main>
+<footer class="site-footer"><div class="container">&copy; 2025 SoftCo — AQI India Live</div></footer>
+</body>
+</html>
